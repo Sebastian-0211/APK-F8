@@ -1,0 +1,10 @@
+{
+  "name": "Remix F8 Stock - Inventario, Facturación y Control de Usuarios",
+  "description": "Sistema de gestión de repuestos automotrices con organización matricial por canastas, control de usuarios y roles RBAC (Dueño, Administrador, Vendedor, Empleado), facturación manual/electrónica, despacho manual de emergencia y estadísticas de vendedores y productos.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
