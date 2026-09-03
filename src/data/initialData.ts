@@ -218,23 +218,23 @@ export const INITIAL_RACKS: RackConfig[] = [
   {
     rackNumber: 1,
     name: 'Estantería 1 - Sistema de Frenos y Suspensión',
-    totalRows: 4, // 4 filas (F1 a F4)
-    totalCols: 5, // 5 columnas de canastas (C1 a C5)
+    totalRows: 12, // 12 filas (F1 a F12)
+    totalCols: 4,  // 4 columnas de canastas (C1 a C4) = 48 canastas
     description: 'Pastillas, discos, bombas de freno, amortiguadores y terminales',
     colorTheme: 'amber',
   },
   {
     rackNumber: 2,
     name: 'Estantería 2 - Motor, Filtros y Distribución',
-    totalRows: 4,
-    totalCols: 5,
+    totalRows: 12,
+    totalCols: 4,
     description: 'Filtros de aceite/aire, bujías, correas de repartición y bombas de agua',
     colorTheme: 'blue',
   },
   {
     rackNumber: 3,
     name: 'Estantería 3 - Sistema Eléctrico e Iluminación',
-    totalRows: 3,
+    totalRows: 12,
     totalCols: 4,
     description: 'Alternadores, arrancadores, bobinas, sensores y faros',
     colorTheme: 'emerald',
@@ -242,7 +242,7 @@ export const INITIAL_RACKS: RackConfig[] = [
   {
     rackNumber: 4,
     name: 'Estantería 4 - Embrague, Transmisión y Líquidos',
-    totalRows: 3,
+    totalRows: 12,
     totalCols: 4,
     description: 'Kits de embrague, crucetas, rodamientos y aceites especializados',
     colorTheme: 'purple',

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   X,
   ScanLine,
@@ -14,8 +15,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   Camera,
+  CameraOff,
   MapPin,
-  Sparkles
+  Sparkles,
+  Zap,
+  RotateCcw,
+  Volume2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -28,6 +33,8 @@ import {
   UserRole
 } from '../types';
 import { soundManager } from '../utils/audio';
+import { useBarcodeGun } from '../hooks/useBarcodeGun';
+import { NumberInput } from './common/NumberInput';
 
 interface NewSaleModalProps {
   isOpen: boolean;
@@ -77,7 +84,21 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Camera & Barcode Gun Scanner States
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isContinuousCamera, setIsContinuousCamera] = useState<boolean>(true);
+  const [lastScanNotice, setLastScanNotice] = useState<{
+    name: string;
+    barcode: string;
+    source: 'GUN' | 'CAMERA';
+    time: string;
+  } | null>(null);
+
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const scannerRegionId = 'sale-camera-scanner-viewport';
+  const lastScanTimeRef = useRef<number>(0);
 
   // Generate default manual number or electronic invoice number
   useEffect(() => {
@@ -113,68 +134,181 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
     setIsSearching(true);
   }, [searchQuery, parts]);
 
-  if (!isOpen) return null;
-
   // Add Part to cart helper
-  const addPartToCart = (part: AutoPart, qty: number = 1) => {
+  const addPartToCart = useCallback((part: AutoPart, qty: number = 1) => {
     setErrorMsg(null);
 
-    // Check available stock
-    const existingIndex = items.findIndex((item) => item.partId === part.id);
-    const currentInCart = existingIndex >= 0 ? items[existingIndex].quantity : 0;
-    const requestedTotal = currentInCart + qty;
+    setItems((prevItems) => {
+      // Check available stock
+      const existingIndex = prevItems.findIndex((item) => item.partId === part.id);
+      const currentInCart = existingIndex >= 0 ? prevItems[existingIndex].quantity : 0;
+      const requestedTotal = currentInCart + qty;
 
-    if (requestedTotal > part.quantity) {
-      setErrorMsg(
-        `Stock insuficiente para "${part.name}". Disponible en canasta [${part.location.binCode}]: ${part.quantity} ${part.unit}.`
-      );
-      soundManager.playWarningBeep();
-      return;
-    }
+      if (requestedTotal > part.quantity) {
+        setErrorMsg(
+          `Stock insuficiente para "${part.name}". Disponible en canasta [${part.location.binCode}]: ${part.quantity} ${part.unit}.`
+        );
+        soundManager.playWarningBeep();
+        return prevItems;
+      }
 
-    // Determine unit price (use promotionalPrice if active)
-    const effectivePrice = part.promotionalPrice && part.promotionalPrice > 0
-      ? part.promotionalPrice
-      : part.salePrice;
+      // Determine unit price (use promotionalPrice if active)
+      const effectivePrice =
+        part.promotionalPrice && part.promotionalPrice > 0
+          ? part.promotionalPrice
+          : part.salePrice;
 
-    if (existingIndex >= 0) {
-      // Update quantity
-      const updated = [...items];
-      const prev = updated[existingIndex];
-      const newQty = prev.quantity + qty;
-      const subtotal = newQty * prev.unitPrice * (1 - prev.discountPercent / 100);
+      if (existingIndex >= 0) {
+        // Update quantity
+        const updated = [...prevItems];
+        const prev = updated[existingIndex];
+        const newQty = prev.quantity + qty;
+        const subtotal = newQty * prev.unitPrice * (1 - prev.discountPercent / 100);
 
-      updated[existingIndex] = {
-        ...prev,
-        quantity: newQty,
-        subtotal,
-      };
-      setItems(updated);
-    } else {
-      // Add new item
-      const newItem: SaleItem = {
-        partId: part.id,
-        partName: part.name,
-        sku: part.sku,
-        barcode: part.barcode,
-        brand: part.brand,
-        category: part.category,
-        unit: part.unit,
-        quantity: qty,
-        unitPrice: effectivePrice,
-        costPrice: part.costPrice,
-        discountPercent: 0,
-        subtotal: qty * effectivePrice,
-        locationBin: part.location.binCode,
-      };
-      setItems((prev) => [newItem, ...prev]);
-    }
+        updated[existingIndex] = {
+          ...prev,
+          quantity: newQty,
+          subtotal,
+        };
+        soundManager.playSuccessBeep();
+        return updated;
+      } else {
+        // Add new item
+        const newItem: SaleItem = {
+          partId: part.id,
+          partName: part.name,
+          sku: part.sku,
+          barcode: part.barcode,
+          brand: part.brand,
+          category: part.category,
+          unit: part.unit,
+          quantity: qty,
+          unitPrice: effectivePrice,
+          costPrice: part.costPrice,
+          discountPercent: 0,
+          subtotal: qty * effectivePrice,
+          locationBin: part.location.binCode,
+        };
+        soundManager.playSuccessBeep();
+        return [newItem, ...prevItems];
+      }
+    });
 
-    soundManager.playSuccessBeep();
     setSearchQuery('');
     setQuickCodeInput('');
     setIsSearching(false);
-  };
+  }, []);
+
+  // Unified barcode scan processor for hardware gun and camera
+  const handleScanCode = useCallback(
+    (codeRaw: string, source: 'GUN' | 'CAMERA') => {
+      const code = codeRaw.trim();
+      if (!code) return;
+
+      // Anti-duplicate debounce for camera scanner (1.2s)
+      const now = Date.now();
+      if (source === 'CAMERA' && now - lastScanTimeRef.current < 1200) {
+        return;
+      }
+      lastScanTimeRef.current = now;
+
+      const matched = parts.find(
+        (p) =>
+          p.barcode.toLowerCase() === code.toLowerCase() ||
+          p.sku.toLowerCase() === code.toLowerCase() ||
+          (p.oemCode && p.oemCode.toLowerCase() === code.toLowerCase())
+      );
+
+      if (matched) {
+        addPartToCart(matched, 1);
+        setLastScanNotice({
+          name: matched.name,
+          barcode: matched.barcode,
+          source,
+          time: new Date().toLocaleTimeString(),
+        });
+        if (source === 'CAMERA' && !isContinuousCamera) {
+          setIsCameraActive(false);
+        }
+      } else {
+        soundManager.playWarningBeep();
+        setErrorMsg(
+          `Código "${code}" leído por ${
+            source === 'GUN' ? 'pistola lectora' : 'cámara'
+          }, pero no se encontró en el inventario.`
+        );
+      }
+    },
+    [parts, isContinuousCamera, addPartToCart]
+  );
+
+  // Hardware Barcode Gun Integration (active while modal is open)
+  const { isGunActive } = useBarcodeGun({
+    onScan: (barcode) => handleScanCode(barcode, 'GUN'),
+    enabled: isOpen,
+  });
+
+  // Camera Scanner Lifecycle
+  useEffect(() => {
+    let scanner: Html5Qrcode | null = null;
+
+    if (isOpen && isCameraActive) {
+      setCameraError(null);
+      const timer = setTimeout(() => {
+        try {
+          scanner = new Html5Qrcode(scannerRegionId);
+          html5QrCodeRef.current = scanner;
+
+          const config = {
+            fps: 15,
+            qrbox: { width: 260, height: 160 },
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.QR_CODE,
+            ],
+          };
+
+          scanner
+            .start(
+              { facingMode: 'environment' },
+              config,
+              (decodedText) => {
+                handleScanCode(decodedText, 'CAMERA');
+              },
+              () => {
+                // Ignore frames without barcodes
+              }
+            )
+            .catch((err) => {
+              console.warn('Camera error:', err);
+              setCameraError('No se pudo acceder a la cámara. Revisa permisos o usa la pistola lectora.');
+              setIsCameraActive(false);
+            });
+        } catch (err: any) {
+          setCameraError('Error al iniciar cámara: ' + (err?.message || err));
+          setIsCameraActive(false);
+        }
+      }, 150);
+
+      return () => {
+        clearTimeout(timer);
+        if (scanner) {
+          scanner.stop().then(() => scanner?.clear()).catch(() => {});
+        }
+        html5QrCodeRef.current = null;
+      };
+    } else {
+      if (html5QrCodeRef.current) {
+        html5QrCodeRef.current.stop().then(() => html5QrCodeRef.current?.clear()).catch(() => {});
+        html5QrCodeRef.current = null;
+      }
+    }
+  }, [isOpen, isCameraActive, handleScanCode]);
 
   // Handle Quick Barcode scan / submit from hardware gun or manual enter
   const handleQuickCodeSubmit = (e: React.FormEvent) => {
@@ -328,6 +462,8 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
     onCompleteSale(newSaleInvoice);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
@@ -554,10 +690,103 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
               <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block font-mono">
                 3. Repuestos & Productos Facturados ({items.length})
               </span>
-              <span className="text-[11px] text-slate-500 font-mono">
-                🔫 Compatible con disparos de pistola USB/Bluetooth
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Hardware Barcode Gun Indicator */}
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition-all ${
+                    isGunActive
+                      ? 'bg-emerald-500 text-white animate-pulse shadow-xs'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                  }`}
+                  title="Pistola lectora activa y lista. Simplemente dispara al código de barras del producto."
+                >
+                  <ScanLine className="w-3.5 h-3.5" />
+                  {isGunActive ? '🔫 Disparo de Pistola Detectado!' : '🔫 Pistola Lectora Lista'}
+                </span>
+
+                {/* Camera Scanner Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsCameraActive((prev) => !prev)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-xs ${
+                    isCameraActive
+                      ? 'bg-rose-600 text-white hover:bg-rose-700'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {isCameraActive ? (
+                    <>
+                      <CameraOff className="w-3.5 h-3.5" />
+                      Cerrar Cámara
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-3.5 h-3.5" />
+                      Escanear con Cámara
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
+
+            {/* Embedded Camera Viewfinder when enabled */}
+            {isCameraActive && (
+              <div className="p-4 bg-slate-900 rounded-xl text-white space-y-3 shadow-lg border-2 border-blue-500 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-xs font-bold font-mono">
+                      Cámara Lectora Activa • Apunta al código de barras del repuesto
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 text-xs font-medium cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isContinuousCamera}
+                        onChange={(e) => setIsContinuousCamera(e.target.checked)}
+                        className="rounded text-blue-500"
+                      />
+                      Escaneo continuo
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCameraActive(false)}
+                      className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Html5Qrcode container */}
+                <div className="relative mx-auto max-w-md overflow-hidden rounded-lg bg-black border border-slate-700 aspect-video flex items-center justify-center">
+                  <div id={scannerRegionId} className="w-full h-full" />
+                </div>
+
+                {cameraError && (
+                  <div className="p-2 bg-rose-900/80 border border-rose-500 rounded text-rose-200 text-xs text-center">
+                    {cameraError}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Last Scanned Notice Flash */}
+            {lastScanNotice && (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center justify-between text-xs text-emerald-900 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    ✓ <strong>{lastScanNotice.source === 'GUN' ? 'Pistola' : 'Cámara'}:</strong> Se agregó{' '}
+                    <strong>{lastScanNotice.name}</strong> ({lastScanNotice.barcode}) a la factura.
+                  </span>
+                </div>
+                <span className="text-[10px] text-emerald-600 font-mono shrink-0">
+                  {lastScanNotice.time}
+                </span>
+              </div>
+            )}
 
             {/* Quick barcode search & catalog picker bar */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
@@ -668,11 +897,12 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
                             >
                               -
                             </button>
-                            <input
-                              type="number"
-                              min="1"
+                            <NumberInput
+                              min={1}
+                              max={parts.find((p) => p.id === item.partId)?.quantity || 999}
                               value={item.quantity}
-                              onChange={(e) => handleItemQtyChange(idx, parseInt(e.target.value) || 1)}
+                              onChange={(val) => handleItemQtyChange(idx, val)}
+                              fallbackValue={1}
                               className="w-12 text-center text-xs font-mono font-bold text-slate-900 focus:outline-none"
                             />
                             <button
@@ -690,13 +920,14 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
                         </td>
 
                         <td className="py-2.5 px-3 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={item.discountPercent || ''}
+                          <NumberInput
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={item.discountPercent}
                             placeholder="0"
-                            onChange={(e) => handleItemDiscountChange(idx, parseFloat(e.target.value) || 0)}
+                            onChange={(val) => handleItemDiscountChange(idx, val)}
+                            fallbackValue={0}
                             className="w-12 text-center bg-white border border-slate-300 rounded py-0.5 text-xs font-mono text-slate-900 focus:border-blue-600 focus:outline-none"
                           />
                         </td>
@@ -755,23 +986,37 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase font-mono mb-1">
-                  Tasa de IVA / Impuesto
+                  Tasa de IVA / Impuesto (%)
                 </label>
-                <div className="flex gap-2">
-                  {[0, 12, 16, 19, 21].map((pct) => (
-                    <button
-                      key={pct}
-                      type="button"
-                      onClick={() => setTaxPercent(pct)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all border ${
-                        taxPercent === pct
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                      }`}
-                    >
-                      {pct}%
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[0, 12, 16, 19, 21].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setTaxPercent(pct)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all border ${
+                          taxPercent === pct
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <NumberInput
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={taxPercent}
+                      onChange={(val) => setTaxPercent(val)}
+                      fallbackValue={19}
+                      className="w-14 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold text-slate-900 text-center focus:border-blue-600 focus:outline-none"
+                    />
+                    <span className="text-xs text-slate-500 font-mono">%</span>
+                  </div>
                 </div>
               </div>
 

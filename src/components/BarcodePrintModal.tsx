@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { X, Printer, Barcode as BarcodeIcon, MapPin, Tag, Download } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Printer, Barcode as BarcodeIcon, MapPin, Tag, Download, Loader2 } from 'lucide-react';
 import { AutoPart, RackConfig } from '../types';
 import { formatBinCode, renderBarcodeToElement } from '../utils/barcode';
+import { downloadElementAsPdf } from '../utils/pdfExport';
 
 export type PrintLabelItem = {
   id: string;
@@ -26,6 +27,7 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
   items,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
 
   // Render barcodes after modal mounts
   useEffect(() => {
@@ -51,6 +53,26 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
     window.print();
   };
 
+  const handleDownloadPdf = async () => {
+    if (!containerRef.current) return;
+    try {
+      setIsDownloadingPdf(true);
+      const filename = items[0]?.type === 'BIN_LOCATION'
+        ? 'etiquetas-canastas-estanterias.pdf'
+        : 'etiquetas-codigos-barras.pdf';
+      await downloadElementAsPdf(containerRef.current, {
+        filename,
+        orientation: 'portrait',
+        format: 'a4',
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Hubo un error al generar el archivo PDF. Intenta de nuevo.');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto print:p-0 print:bg-white">
       <div className="bg-white border-2 border-slate-200 rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] print:max-h-none print:border-none print:shadow-none print:bg-white print:text-black">
@@ -73,11 +95,25 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors shadow-xs disabled:opacity-50"
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>{isDownloadingPdf ? 'Generando PDF...' : 'Descargar PDF'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handlePrint}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors shadow-xs"
             >
               <Printer className="w-4 h-4" />
-              Imprimir Ahora (Ctrl + P)
+              <span>Imprimir</span>
             </button>
             <button
               type="button"
@@ -158,6 +194,19 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
             Total etiquetas a generar: {items.length}
           </span>
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>Descargar PDF</span>
+            </button>
             <button
               type="button"
               onClick={onClose}

@@ -14,10 +14,14 @@ import {
   Tag,
   Settings2,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Maximize2,
+  Grid,
+  Sparkles
 } from 'lucide-react';
 import { AutoPart, RackConfig } from '../types';
 import { formatBinCode } from '../utils/barcode';
+import { NumberInput } from './common/NumberInput';
 
 interface ShelvingViewProps {
   racks: RackConfig[];
@@ -50,11 +54,15 @@ export const ShelvingView: React.FC<ShelvingViewProps> = ({
   const [isConfiguringRack, setIsConfiguringRack] = useState<boolean>(false);
   const [isCreatingRack, setIsCreatingRack] = useState<boolean>(false);
 
-  // New Rack State
+  // New Rack State - Default to physical warehouse standard: 4 columns x 12 rows
   const [newRackName, setNewRackName] = useState<string>('');
-  const [newRackRows, setNewRackRows] = useState<number>(4);
-  const [newRackCols, setNewRackCols] = useState<number>(5);
+  const [newRackRows, setNewRackRows] = useState<number>(12);
+  const [newRackCols, setNewRackCols] = useState<number>(4);
   const [newRackDesc, setNewRackDesc] = useState<string>('');
+
+  // Filtering & View Mode for 12-row physical shelving
+  const [levelFilter, setLevelFilter] = useState<'ALL' | 'TOP' | 'MID' | 'LOW'>('ALL');
+  const [binSearch, setBinSearch] = useState<string>('');
 
   const currentRack = racks.find((r) => r.rackNumber === selectedRackNumber) || racks[0];
 
@@ -86,8 +94,8 @@ export const ShelvingView: React.FC<ShelvingViewProps> = ({
     const newRack: RackConfig = {
       rackNumber: nextNumber,
       name: newRackName.trim(),
-      totalRows: Number(newRackRows) || 4,
-      totalCols: Number(newRackCols) || 5,
+      totalRows: Number(newRackRows) || 12,
+      totalCols: Number(newRackCols) || 4,
       description: newRackDesc.trim(),
       colorTheme: 'blue',
     };
@@ -231,20 +239,36 @@ export const ShelvingView: React.FC<ShelvingViewProps> = ({
           {isConfiguringRack && (
             <form
               onSubmit={handleUpdateRackSubmit}
-              className="bg-slate-50 border-2 border-blue-500/40 rounded-xl p-4 space-y-3"
+              className="bg-slate-50 border-2 border-blue-500/40 rounded-xl p-4 space-y-3 shadow-sm"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-blue-600 uppercase tracking-wide flex items-center gap-1.5 font-mono">
                   <Settings2 className="w-3.5 h-3.5" />
-                  Dimensiones de Estantería {currentRack.rackNumber}
+                  Configuración Física: Estantería #{currentRack.rackNumber}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setIsConfiguringRack(false)}
-                  className="text-xs text-slate-500 hover:text-slate-800 font-medium"
-                >
-                  Cancelar
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateRackConfig({
+                        ...currentRack,
+                        totalRows: 12,
+                        totalCols: 4,
+                      })
+                    }
+                    className="text-[11px] px-2.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded font-bold transition-colors"
+                    title="Ajusta automáticamente a 4 columnas y 12 filas (48 canastas)"
+                  >
+                    📐 Aplicar Estándar Físico (4 Cols × 12 Filas)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsConfiguringRack(false)}
+                    className="text-xs text-slate-500 hover:text-slate-800 font-medium px-2 py-1"
+                  >
+                    Cerrar
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -263,39 +287,41 @@ export const ShelvingView: React.FC<ShelvingViewProps> = ({
                 </div>
                 <div>
                   <label className="text-[11px] text-slate-600 font-medium block mb-1">
-                    Número de Filas (Niveles)
+                    Número de Filas (Niveles: 1 a 24)
                   </label>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={1}
-                    max={10}
+                    max={24}
                     value={currentRack.totalRows}
-                    onChange={(e) =>
+                    onChange={(val) =>
                       onUpdateRackConfig({
                         ...currentRack,
-                        totalRows: Math.max(1, parseInt(e.target.value) || 1),
+                        totalRows: Math.max(1, val),
                       })
                     }
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
+                    fallbackValue={12}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:border-blue-600 focus:outline-none"
                   />
+                  <span className="text-[10px] text-slate-400">Estándar físico: 12 filas</span>
                 </div>
                 <div>
                   <label className="text-[11px] text-slate-600 font-medium block mb-1">
-                    Canastas por Fila (Columnas)
+                    Canastas por Fila (Columnas: 1 a 12)
                   </label>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={1}
-                    max={10}
+                    max={12}
                     value={currentRack.totalCols}
-                    onChange={(e) =>
+                    onChange={(val) =>
                       onUpdateRackConfig({
                         ...currentRack,
-                        totalCols: Math.max(1, parseInt(e.target.value) || 1),
+                        totalCols: Math.max(1, val),
                       })
                     }
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:border-blue-600 focus:outline-none"
+                    fallbackValue={4}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:border-blue-600 focus:outline-none"
                   />
+                  <span className="text-[10px] text-slate-400">Estándar físico: 4 columnas</span>
                 </div>
               </div>
             </form>
@@ -304,39 +330,130 @@ export const ShelvingView: React.FC<ShelvingViewProps> = ({
           {/* The Physical Shelving Diagram (Matrix) */}
           <div className="bg-white border-2 border-slate-200 rounded-xl p-4 sm:p-6 shadow-sm relative overflow-hidden">
             {/* Shelf Upright Metal Frame Visuals */}
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-200 text-xs text-slate-500">
-              <div className="flex items-center gap-2 font-mono">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-200 text-xs text-slate-500">
+              <div className="flex flex-wrap items-center gap-2 font-mono">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                <span className="font-bold text-slate-700">Estantería #{currentRack.rackNumber}</span> • {currentRack.totalRows} Niveles × {currentRack.totalCols} Columnas
+                <span className="font-bold text-slate-800">Estantería #{currentRack.rackNumber}</span>
+                <span className="text-slate-400">•</span>
+                <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  {currentRack.totalCols} Columnas × {currentRack.totalRows} Filas ({currentRack.totalCols * currentRack.totalRows} Canastas)
+                </span>
               </div>
-              <div className="flex items-center gap-4 text-[11px]">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-slate-100 border border-slate-300" />
-                  Vacía
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-blue-50 border border-blue-500" />
-                  Con Repuestos
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-rose-100 border border-rose-500" />
-                  Stock Bajo
-                </span>
+
+              {/* Level Zone Filter Pills */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setLevelFilter('ALL')}
+                    className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                      levelFilter === 'ALL'
+                        ? 'bg-white text-slate-900 font-bold shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Ver Todas ({currentRack.totalRows} Filas)
+                  </button>
+                  {currentRack.totalRows >= 8 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setLevelFilter('TOP')}
+                        className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                          levelFilter === 'TOP'
+                            ? 'bg-white text-slate-900 font-bold shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Niveles 9-12 (Superior)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLevelFilter('MID')}
+                        className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                          levelFilter === 'MID'
+                            ? 'bg-white text-slate-900 font-bold shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Niveles 5-8 (Medio)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLevelFilter('LOW')}
+                        className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                          levelFilter === 'LOW'
+                            ? 'bg-white text-slate-900 font-bold shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Niveles 1-4 (Inferior)
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Status Legend */}
+                <div className="hidden lg:flex items-center gap-3 text-[11px] border-l border-slate-200 pl-3">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded bg-slate-100 border border-slate-300" />
+                    Vacía
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded bg-blue-50 border border-blue-500" />
+                    Con Repuestos
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded bg-rose-100 border border-rose-500" />
+                    Stock Bajo
+                  </span>
+                </div>
               </div>
             </div>
 
+            {/* Column Headers for Clear Physical Alignment (C1, C2, C3, C4) */}
+            <div
+              className="grid gap-2 sm:gap-3 mb-2 px-1 text-center text-xs font-mono font-bold text-slate-600"
+              style={{
+                gridTemplateColumns: `repeat(${currentRack.totalCols}, minmax(0, 1fr))`,
+              }}
+            >
+              {Array.from({ length: currentRack.totalCols }, (_, c) => (
+                <div
+                  key={c}
+                  className="bg-slate-100 py-1.5 px-2 rounded-md border border-slate-200 text-slate-700 shadow-xs flex items-center justify-center gap-1"
+                >
+                  <span className="text-blue-600 font-extrabold">C{c + 1}</span>
+                  <span className="text-[10px] text-slate-500 font-sans hidden sm:inline">(Columna {c + 1})</span>
+                </div>
+              ))}
+            </div>
+
             {/* Matrix Shelf Rows (Rendered from top row down to bottom row) */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               {Array.from({ length: currentRack.totalRows }, (_, rowIndex) => {
                 // Row numbers: Row totalRows down to 1 (or 1 to totalRows)
                 const rowNum = currentRack.totalRows - rowIndex;
 
+                // Check zone filter
+                if (levelFilter === 'TOP' && rowNum < 9) return null;
+                if (levelFilter === 'MID' && (rowNum < 5 || rowNum > 8)) return null;
+                if (levelFilter === 'LOW' && rowNum > 4) return null;
+
                 return (
-                  <div key={rowNum} className="space-y-1.5">
+                  <div key={rowNum} className="space-y-1">
                     <div className="flex items-center justify-between text-xs text-slate-500 font-mono px-1">
-                      <span className="font-bold text-slate-700">
-                        Nivel / Fila {rowNum} (F{rowNum})
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-800 bg-slate-200 px-1.5 py-0.5 rounded text-[11px]">
+                          F{rowNum}
+                        </span>
+                        <span className="font-semibold text-slate-700">
+                          Nivel / Fila {rowNum}
+                        </span>
+                        <span className="text-[10px] text-slate-400 hidden sm:inline">
+                          {rowNum >= 9 ? '(Nivel Superior)' : rowNum >= 5 ? '(Nivel Medio)' : '(Nivel Inferior / Suelo)'}
+                        </span>
+                      </div>
                       <span className="text-[10px] text-slate-400">
                         {currentRack.totalCols} canastas
                       </span>
@@ -344,7 +461,7 @@ export const ShelvingView: React.FC<ShelvingViewProps> = ({
 
                     {/* Shelf Beam / Horizontal Grid */}
                     <div
-                      className="grid gap-2.5 sm:gap-3 p-2.5 bg-slate-100 border border-slate-200 rounded-lg shadow-xs"
+                      className="grid gap-2 sm:gap-3 p-2 bg-slate-100 border border-slate-200 rounded-lg shadow-xs"
                       style={{
                         gridTemplateColumns: `repeat(${currentRack.totalCols}, minmax(0, 1fr))`,
                       }}
@@ -633,30 +750,46 @@ export const ShelvingView: React.FC<ShelvingViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">
-                    Número de Filas (Niveles)
+                    Número de Filas (Niveles) *
                   </label>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={1}
-                    max={12}
+                    max={24}
                     value={newRackRows}
-                    onChange={(e) => setNewRackRows(parseInt(e.target.value) || 1)}
-                    className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none"
+                    onChange={(val) => setNewRackRows(val)}
+                    fallbackValue={12}
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none"
                   />
+                  <span className="text-[10px] text-slate-500 block mt-0.5">Estándar físico: 12</span>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">
-                    Canastas por Fila (Columnas)
+                    Canastas por Fila (Columnas) *
                   </label>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={1}
                     max={12}
                     value={newRackCols}
-                    onChange={(e) => setNewRackCols(parseInt(e.target.value) || 1)}
-                    className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none"
+                    onChange={(val) => setNewRackCols(val)}
+                    fallbackValue={4}
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none"
                   />
+                  <span className="text-[10px] text-slate-500 block mt-0.5">Estándar físico: 4</span>
                 </div>
+              </div>
+
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center justify-between">
+                <span>Total de canastas calculadas: <strong>{newRackRows * newRackCols} canastas</strong></span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewRackRows(12);
+                    setNewRackCols(4);
+                  }}
+                  className="px-2 py-1 bg-white hover:bg-blue-100 text-blue-700 rounded text-[11px] font-bold border border-blue-300 transition-colors"
+                >
+                  📐 Cargar 4 Cols × 12 Filas
+                </button>
               </div>
 
               <div>

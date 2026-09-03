@@ -13,9 +13,11 @@ import {
   QrCode,
   ShieldCheck,
   Tag,
-  MapPin
+  MapPin,
+  Loader2
 } from 'lucide-react';
 import { SaleInvoice } from '../types';
+import { downloadElementAsPdf } from '../utils/pdfExport';
 
 interface InvoiceViewerModalProps {
   isOpen: boolean;
@@ -29,6 +31,7 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
   invoice,
 }) => {
   const [printFormat, setPrintFormat] = useState<'A4' | 'TICKET'>('A4');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen || !invoice) return null;
@@ -37,6 +40,25 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
+    try {
+      setIsDownloadingPdf(true);
+      const safeNum = invoice.invoiceNumber.replace(/[^a-zA-Z0-9-_]/g, '_');
+      const filename = `factura_${safeNum}_${printFormat.toLowerCase()}.pdf`;
+      await downloadElementAsPdf(printRef.current, {
+        filename,
+        orientation: 'portrait',
+        format: printFormat === 'A4' ? 'a4' : 'ticket',
+      });
+    } catch (error) {
+      console.error('Error downloading invoice PDF:', error);
+      alert('Hubo un error al generar el PDF de la factura.');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   const getPaymentMethodLabel = (method: string) => {
@@ -118,6 +140,20 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
                 <span className="hidden xs:inline">Ticket POS</span>
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors disabled:opacity-50"
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>{isDownloadingPdf ? 'Generando...' : 'Descargar PDF'}</span>
+            </button>
 
             <button
               type="button"
@@ -328,7 +364,10 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
 
           {/* FORMAT TICKET: POS Thermal Printer (80mm) */}
           {printFormat === 'TICKET' && (
-            <div className="bg-white border border-slate-300 p-4 w-72 shadow-md text-slate-900 font-mono text-[11px] space-y-3 print:shadow-none print:border-none">
+            <div
+              ref={printRef}
+              className="bg-white border border-slate-300 p-4 w-72 shadow-md text-slate-900 font-mono text-[11px] space-y-3 print:shadow-none print:border-none"
+            >
               {/* Header */}
               <div className="text-center space-y-0.5 border-b border-dashed border-slate-400 pb-2">
                 <div className="font-black text-sm font-sans">AUTOPART GRID</div>
@@ -414,14 +453,32 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
 
         {/* Footer info bar */}
         <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex items-center justify-between text-xs text-slate-500 shrink-0 print:hidden">
-          <span>Ganancia bruta estimada en esta venta: <strong className="text-emerald-700 font-mono">${invoice.grossProfit.toFixed(2)}</strong></span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 shadow-xs transition-colors"
-          >
-            Cerrar
-          </button>
+          <span>
+            Ganancia bruta estimada en esta venta:{' '}
+            <strong className="text-emerald-700 font-mono">${invoice.grossProfit.toFixed(2)}</strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>Descargar PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 shadow-xs transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       </div>
     </div>

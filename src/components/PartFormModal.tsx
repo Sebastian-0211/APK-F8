@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { AutoPart, PartCategory, RackConfig } from '../types';
 import { formatBinCode, generateRandomBarcode, generateSKU } from '../utils/barcode';
+import { NumberInput } from './common/NumberInput';
 
 interface PartFormModalProps {
   isOpen: boolean;
@@ -444,13 +445,14 @@ export const PartFormModal: React.FC<PartFormModalProps> = ({
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
                   Stock Inicial *
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   min={0}
+                  step={1}
                   required
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none"
+                  onChange={(val) => setQuantity(Math.max(0, val))}
+                  fallbackValue={0}
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none font-bold"
                 />
               </div>
 
@@ -459,13 +461,14 @@ export const PartFormModal: React.FC<PartFormModalProps> = ({
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
                   Stock Mínimo (Alerta)
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   min={1}
+                  step={1}
                   required
                   value={minStock}
-                  onChange={(e) => setMinStock(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none"
+                  onChange={(val) => setMinStock(Math.max(1, val))}
+                  fallbackValue={1}
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none font-bold"
                 />
               </div>
 
@@ -492,13 +495,13 @@ export const PartFormModal: React.FC<PartFormModalProps> = ({
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
                   Precio Costo ($)
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
+                <NumberInput
+                  step={0.01}
                   min={0}
                   value={costPrice}
-                  onChange={(e) => setCostPrice(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none"
+                  onChange={(val) => setCostPrice(Math.max(0, val))}
+                  fallbackValue={0}
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none font-bold"
                 />
               </div>
 
@@ -514,14 +517,14 @@ export const PartFormModal: React.FC<PartFormModalProps> = ({
                     </span>
                   )}
                 </div>
-                <input
-                  type="number"
-                  step="0.01"
+                <NumberInput
+                  step={0.01}
                   min={0}
                   required
                   value={salePrice}
-                  onChange={(e) => setSalePrice(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none"
+                  onChange={(val) => setSalePrice(Math.max(0, val))}
+                  fallbackValue={0}
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none font-bold"
                 />
               </div>
             </div>

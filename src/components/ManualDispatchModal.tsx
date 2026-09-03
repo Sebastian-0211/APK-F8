@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { AutoPart, AppUser, StockMovement } from '../types';
 import { soundManager } from '../utils/audio';
+import { NumberInput } from './common/NumberInput';
 
 interface ManualDispatchModalProps {
   isOpen: boolean;
@@ -336,12 +337,12 @@ export const ManualDispatchModal: React.FC<ManualDispatchModalProps> = ({
                       >
                         <Minus className="w-4 h-4" />
                       </button>
-                      <input
-                        type="number"
+                      <NumberInput
                         min={1}
                         max={operationType === 'OUT' ? selectedPart.quantity : 999}
                         value={quantity}
-                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                        onChange={(val) => setQuantity(Math.max(1, val))}
+                        fallbackValue={1}
                         className="w-full text-center py-1.5 border border-slate-300 rounded-lg text-xs font-bold font-mono focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                       />
                       <button

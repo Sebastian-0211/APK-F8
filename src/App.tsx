@@ -82,7 +82,16 @@ export default function App() {
     const saved = localStorage.getItem(STORAGE_KEY_RACKS);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Adapt old configurations to the physical 4 columns x 12 rows standard
+          return parsed.map((r: RackConfig) => ({
+            ...r,
+            totalRows: r.totalRows <= 4 ? 12 : r.totalRows,
+            totalCols: r.totalCols === 5 ? 4 : r.totalCols,
+          }));
+        }
+        return parsed;
       } catch {
         return INITIAL_RACKS;
       }
