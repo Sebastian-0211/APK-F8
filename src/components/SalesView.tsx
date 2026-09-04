@@ -63,7 +63,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   }, [sales]);
 
   // Set default month to most recent if available
-  const activeMonthValue = selectedMonth === 'ALL' && availableMonths.length > 0
+  const activeMonthValue = selectedMonth === 'ALL' && (availableMonths?.length || 0) > 0
     ? availableMonths[0]
     : selectedMonth;
 
@@ -505,16 +505,16 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       {/* Items Summary & Baskets */}
                       <td className="py-3 px-3 max-w-[200px]">
                         <div className="text-slate-800 text-xs truncate">
-                          {sale.items.map((it) => `${it.quantity}x ${it.partName}`).join(', ')}
+                          {(sale.items || []).map((it) => `${it.quantity}x ${it.partName}`).join(', ')}
                         </div>
                         <div className="text-[10px] text-blue-700 font-mono mt-0.5 flex flex-wrap gap-1">
-                          {sale.items.slice(0, 2).map((it, idx) => (
+                          {(sale.items || []).slice(0, 2).map((it, idx) => (
                             <span key={idx} className="bg-blue-50 px-1 py-0.2 rounded border border-blue-100">
                               {it.locationBin}
                             </span>
                           ))}
-                          {sale.items.length > 2 && (
-                            <span className="text-slate-400">+{sale.items.length - 2}</span>
+                          {(sale.items?.length || 0) > 2 && (
+                            <span className="text-slate-400">+{(sale.items?.length || 0) - 2}</span>
                           )}
                         </div>
                       </td>

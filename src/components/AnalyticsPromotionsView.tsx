@@ -112,8 +112,9 @@ export const AnalyticsPromotionsView: React.FC<AnalyticsPromotionsViewProps> = (
     });
 
     // Accumulate all sales
-    sales.forEach((sale) => {
-      sale.items.forEach((item) => {
+    (sales || []).forEach((sale) => {
+      (sale.items || []).forEach((item) => {
+        if (!item) return;
         const existing = map.get(item.partId);
         if (existing) {
           existing.unitsSold += item.quantity;
@@ -187,9 +188,10 @@ export const AnalyticsPromotionsView: React.FC<AnalyticsPromotionsViewProps> = (
   // 3. Chart: Sales by Category
   const categoryData = useMemo(() => {
     const catMap: Record<string, number> = {};
-    sales.forEach((s) => {
-      s.items.forEach((it) => {
-        const cat = it.category.split(' ')[0] || 'General';
+    (sales || []).forEach((s) => {
+      (s.items || []).forEach((it) => {
+        if (!it) return;
+        const cat = (it.category || 'General').split(' ')[0] || 'General';
         catMap[cat] = (catMap[cat] || 0) + it.subtotal;
       });
     });

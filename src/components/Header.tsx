@@ -103,7 +103,7 @@ export const Header: React.FC<HeaderProps> = ({
                   activeTab === 'INVENTORY' ? 'bg-blue-800 text-white' : 'bg-slate-200 text-slate-600'
                 }`}
               >
-                {parts.length}
+                {parts?.length || 0}
               </span>
             </button>
 
@@ -123,7 +123,7 @@ export const Header: React.FC<HeaderProps> = ({
                   activeTab === 'SHELVING' ? 'bg-blue-800 text-white' : 'bg-slate-200 text-slate-600'
                 }`}
               >
-                {racks.length}
+                {racks?.length || 0}
               </span>
             </button>
 
@@ -143,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
                   activeTab === 'SALES' ? 'bg-blue-800 text-white' : 'bg-slate-200 text-slate-600'
                 }`}
               >
-                {sales.length}
+                {sales?.length || 0}
               </span>
             </button>
 
@@ -279,7 +279,7 @@ export const Header: React.FC<HeaderProps> = ({
               activeTab === 'INVENTORY' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white'
             }`}
           >
-            📦 Repuestos ({parts.length})
+            📦 Repuestos ({parts?.length || 0})
           </button>
           <button
             type="button"
@@ -297,7 +297,7 @@ export const Header: React.FC<HeaderProps> = ({
               activeTab === 'SALES' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white'
             }`}
           >
-            🧾 Ventas ({sales.length})
+            🧾 Ventas ({sales?.length || 0})
           </button>
           <button
             type="button"

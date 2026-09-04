@@ -83,8 +83,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         const matchesBrand = part.brand.toLowerCase().includes(q);
         const matchesOem = part.oemCode?.toLowerCase().includes(q) || false;
         const matchesBin = part.location.binCode.toLowerCase().includes(q);
-        const matchesVehicle = part.compatibleVehicles.some((v) =>
-          v.toLowerCase().includes(q)
+        const matchesVehicle = (part.compatibleVehicles || []).some((v) =>
+          v && typeof v === 'string' && v.toLowerCase().includes(q)
         );
 
         if (
@@ -375,12 +375,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
                       {/* Compatible Vehicles */}
                       <td className="py-3.5 px-3 max-w-[170px]">
-                        <div className="text-[11px] text-slate-700 truncate" title={part.compatibleVehicles.join(', ')}>
-                          {part.compatibleVehicles.slice(0, 2).join(', ')}
+                        <div className="text-[11px] text-slate-700 truncate" title={(part.compatibleVehicles || []).join(', ')}>
+                          {(part.compatibleVehicles || []).slice(0, 2).join(', ')}
                         </div>
-                        {part.compatibleVehicles.length > 2 && (
+                        {(part.compatibleVehicles?.length || 0) > 2 && (
                           <div className="text-[10px] text-slate-400">
-                            +{part.compatibleVehicles.length - 2} modelos más
+                            +{(part.compatibleVehicles?.length || 0) - 2} modelos más
                           </div>
                         )}
                       </td>

@@ -35,6 +35,8 @@ import {
 import { soundManager } from '../utils/audio';
 import { useBarcodeGun } from '../hooks/useBarcodeGun';
 import { NumberInput } from './common/NumberInput';
+import { safeStopScanner } from '../utils/scannerUtils';
+import { findMatchingPart } from '../utils/barcode';
 
 interface NewSaleModalProps {
   isOpen: boolean;
@@ -212,12 +214,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
       }
       lastScanTimeRef.current = now;
 
-      const matched = parts.find(
-        (p) =>
-          p.barcode.toLowerCase() === code.toLowerCase() ||
-          p.sku.toLowerCase() === code.toLowerCase() ||
-          (p.oemCode && p.oemCode.toLowerCase() === code.toLowerCase())
-      );
+      const matched = findMatchingPart(parts, code);
 
       if (matched) {
         addPartToCart(matched, 1);
@@ -297,31 +294,24 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
 
       return () => {
         clearTimeout(timer);
-        if (scanner) {
-          scanner.stop().then(() => scanner?.clear()).catch(() => {});
-        }
+        safeStopScanner(scanner);
         html5QrCodeRef.current = null;
       };
     } else {
       if (html5QrCodeRef.current) {
-        html5QrCodeRef.current.stop().then(() => html5QrCodeRef.current?.clear()).catch(() => {});
+        safeStopScanner(html5QrCodeRef.current);
         html5QrCodeRef.current = null;
       }
     }
   }, [isOpen, isCameraActive, handleScanCode]);
 
   // Handle Quick Barcode scan / submit from hardware gun or manual enter
-  const handleQuickCodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleQuickCodeSubmit = (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) e.preventDefault();
     if (!quickCodeInput.trim()) return;
 
-    const code = quickCodeInput.trim().toLowerCase();
-    const found = parts.find(
-      (p) =>
-        p.barcode.toLowerCase() === code ||
-        p.sku.toLowerCase() === code ||
-        (p.oemCode && p.oemCode.toLowerCase() === code)
-    );
+    const code = quickCodeInput.trim();
+    const found = findMatchingPart(parts, code);
 
     if (found) {
       addPartToCart(found, 1);
@@ -792,7 +782,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
               {/* Barcode scanner input */}
               <div className="sm:col-span-5 relative">
-                <form onSubmit={handleQuickCodeSubmit} className="flex gap-1.5">
+                <div className="flex gap-1.5">
                   <div className="relative flex-1">
                     <ScanLine className="w-4 h-4 text-blue-600 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
@@ -801,16 +791,23 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
                       placeholder="Escanear Código / Barcode..."
                       value={quickCodeInput}
                       onChange={(e) => setQuickCodeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleQuickCodeSubmit();
+                        }
+                      }}
                       className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-slate-900 focus:border-blue-600 focus:outline-none shadow-xs"
                     />
                   </div>
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={handleQuickCodeSubmit}
                     className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors shrink-0"
                   >
                     Agregar
                   </button>
-                </form>
+                </div>
               </div>
 
               {/* Text search input */}

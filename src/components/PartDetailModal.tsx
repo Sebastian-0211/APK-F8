@@ -52,7 +52,7 @@ export const PartDetailModal: React.FC<PartDetailModalProps> = ({
 
   if (!isOpen || !part) return null;
 
-  const partMovements = movements.filter((m) => m.partId === part.id);
+  const partMovements = (movements || []).filter((m) => m.partId === part.id);
   const isLow = part.quantity <= part.minStock && part.quantity > 0;
   const isOut = part.quantity === 0;
 
@@ -210,14 +210,18 @@ export const PartDetailModal: React.FC<PartDetailModalProps> = ({
                 Vehículos Compatibles
               </span>
               <div className="flex flex-wrap gap-1">
-                {part.compatibleVehicles.map((v, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-800 rounded text-[11px] font-medium"
-                  >
-                    {v}
-                  </span>
-                ))}
+                {(part.compatibleVehicles || []).length > 0 ? (
+                  (part.compatibleVehicles || []).map((v, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-800 rounded text-[11px] font-medium"
+                    >
+                      {v}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-slate-400 text-xs italic">Universal / No especificado</span>
+                )}
               </div>
             </div>
           </div>

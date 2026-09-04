@@ -26,7 +26,9 @@ import {
 } from 'lucide-react';
 import { AutoPart, ScannerOperationMode, StockMovement } from '../types';
 import { soundManager } from '../utils/audio';
-import { renderBarcodeToElement } from '../utils/barcode';
+import { renderBarcodeToElement, findMatchingPart } from '../utils/barcode';
+import { safeStopScanner } from '../utils/scannerUtils';
+import { useBarcodeGun } from '../hooks/useBarcodeGun';
 
 interface ScannerModalProps {
   isOpen: boolean;
@@ -88,13 +90,16 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({
     const code = barcodeInput.trim();
     if (!code) return;
 
-    // Search by exact barcode or SKU or OEM code
-    const matchedPart = parts.find(
-      (p) =>
-        p.barcode.toLowerCase() === code.toLowerCase() ||
-        p.sku.toLowerCase() === code.toLowerCase() ||
-        (p.oemCode && p.oemCode.toLowerCase() === code.toLowerCase())
-    );
+    // In REGISTER mode, any scanned code immediately opens the creation form with that code
+    if (mode === 'REGISTER') {
+      soundManager.playSuccessBeep();
+      onOpenCreateWithBarcode(code);
+      onClose();
+      return;
+    }
+
+    // Search by exact barcode, SKU, OEM code, or normalized barcode (strips AIM identifiers, spaces, dashes)
+    const matchedPart = findMatchingPart(parts, code);
 
     if (!matchedPart) {
       soundManager.playErrorBeep();
@@ -240,20 +245,25 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({
 
       return () => {
         clearTimeout(timer);
-        if (scanner && isRunning) {
-          scanner.stop().catch(() => {}).finally(() => {
-            scanner?.clear();
-          });
-        }
+        safeStopScanner(scanner);
+        html5QrCodeRef.current = null;
       };
     } else {
       if (html5QrCodeRef.current) {
-        html5QrCodeRef.current.stop().catch(() => {}).finally(() => {
-          html5QrCodeRef.current?.clear();
-        });
+        safeStopScanner(html5QrCodeRef.current);
+        html5QrCodeRef.current = null;
       }
     }
   }, [isOpen, useCamera, handleProcessBarcode]);
+
+  // Hardware Barcode Gun Integration (active while modal is open)
+  const { isGunActive } = useBarcodeGun({
+    onScan: (scannedCode) => {
+      handleProcessBarcode(scannedCode, 'SCANNER_GUN');
+      setManualCode('');
+    },
+    enabled: isOpen,
+  });
 
   // Handle manual submit
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -289,9 +299,19 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({
                 <h2 className="text-lg font-bold text-slate-900 tracking-tight">
                   Terminal de Escaneo de Códigos
                 </h2>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Lector Activo
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all ${
+                    isGunActive
+                      ? 'bg-amber-100 border border-amber-300 text-amber-800 scale-105 ring-2 ring-amber-400'
+                      : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isGunActive ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-pulse'
+                    }`}
+                  />
+                  {isGunActive ? '🔫 ¡Pistola Leyendo!' : 'Lector Activo'}
                 </span>
               </div>
               <p className="text-xs text-slate-500">
@@ -536,18 +556,32 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({
               {/* Status Alert */}
               {lastScanStatus && (
                 <div
-                  className={`p-3 rounded-lg border text-xs font-medium flex items-start gap-2.5 ${
+                  className={`p-3 rounded-lg border text-xs font-medium flex items-center justify-between gap-2.5 ${
                     lastScanStatus.success
                       ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
                       : 'bg-rose-50 border-rose-300 text-rose-800'
                   }`}
                 >
-                  {lastScanStatus.success ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-2.5">
+                    {lastScanStatus.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <span>{lastScanStatus.message}</span>
+                  </div>
+                  {!lastScanStatus.success && recentScans.length > 0 && !recentScans[0].success && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenCreateWithBarcode(recentScans[0].code);
+                        onClose();
+                      }}
+                      className="shrink-0 px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-bold text-[11px] transition-colors shadow-xs"
+                    >
+                      + Registrar Repuesto
+                    </button>
                   )}
-                  <span>{lastScanStatus.message}</span>
                 </div>
               )}
 

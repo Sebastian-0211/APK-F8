@@ -32,6 +32,8 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
 }) => {
   const [printFormat, setPrintFormat] = useState<'A4' | 'TICKET'>('A4');
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen || !invoice) return null;
@@ -46,16 +48,23 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
     if (!printRef.current) return;
     try {
       setIsDownloadingPdf(true);
+      setDownloadSuccess(false);
+      setDownloadError(null);
       const safeNum = invoice.invoiceNumber.replace(/[^a-zA-Z0-9-_]/g, '_');
       const filename = `factura_${safeNum}_${printFormat.toLowerCase()}.pdf`;
       await downloadElementAsPdf(printRef.current, {
         filename,
         orientation: 'portrait',
         format: printFormat === 'A4' ? 'a4' : 'ticket',
+        marginMm: printFormat === 'A4' ? 10 : 3,
+        fitToPage: printFormat === 'A4',
       });
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 4000);
     } catch (error) {
       console.error('Error downloading invoice PDF:', error);
-      alert('Hubo un error al generar el PDF de la factura.');
+      setDownloadError('No se pudo generar el archivo PDF automáticamente. Puedes usar el botón "Imprimir" y seleccionar "Guardar como PDF".');
+      setTimeout(() => setDownloadError(null), 6000);
     } finally {
       setIsDownloadingPdf(false);
     }
@@ -77,8 +86,8 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white border-2 border-slate-200 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto print:p-0 print:bg-white print:static print:overflow-visible">
+      <div className="bg-white border-2 border-slate-200 rounded-xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] print:max-h-none print:border-none print:shadow-none print:bg-white print:text-black print:w-full print:max-w-none print:static">
         {/* Modal Header & Controls */}
         <div className="bg-slate-50 border-b border-slate-200 px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 shrink-0 print:hidden">
           <div className="flex items-center gap-3">
@@ -145,14 +154,16 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
               type="button"
               onClick={handleDownloadPdf}
               disabled={isDownloadingPdf}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors disabled:opacity-50"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-bold rounded-lg shadow-xs transition-all disabled:opacity-50 ${
+                downloadSuccess ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
             >
               {isDownloadingPdf ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Download className="w-4 h-4" />
               )}
-              <span>{isDownloadingPdf ? 'Generando...' : 'Descargar PDF'}</span>
+              <span>{isDownloadingPdf ? 'Generando...' : downloadSuccess ? '¡PDF Descargado!' : 'Descargar PDF'}</span>
             </button>
 
             <button
@@ -174,13 +185,19 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
           </div>
         </div>
 
+        {downloadError && (
+          <div className="mx-6 mt-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-800 font-medium print:hidden">
+            ⚠️ {downloadError}
+          </div>
+        )}
+
         {/* Invoice View Area */}
-        <div className="p-4 sm:p-6 overflow-y-auto bg-slate-100/70 flex justify-center">
+        <div className="p-4 sm:p-6 overflow-y-auto bg-slate-100/70 flex justify-center print:p-0 print:bg-white print:overflow-visible">
           {/* FORMAT A4: Full Official Document Sheet */}
           {printFormat === 'A4' && (
             <div
               ref={printRef}
-              className="bg-white border border-slate-300 rounded-lg p-6 sm:p-8 w-full max-w-2xl shadow-md text-slate-900 space-y-6 print:shadow-none print:border-none print:p-0"
+              className="bg-white border border-slate-300 rounded-lg p-6 sm:p-7 w-full max-w-[760px] shadow-md text-slate-900 space-y-5 print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full"
             >
               {/* Top Business Header */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-5 border-b-2 border-slate-800">
@@ -274,7 +291,7 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {invoice.items.map((item, idx) => (
+                    {(invoice.items || []).map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/60">
                         <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
                           {item.quantity} {item.unit}
@@ -335,24 +352,24 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
 
               {/* Electronic Stamp & CUFE/QR Footer */}
               {isElectronic && invoice.electronicDetails && (
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row items-center gap-4 text-xs font-mono">
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-3.5 text-xs font-mono">
                   <div className="p-2 bg-white border border-slate-300 rounded shadow-xs shrink-0 flex flex-col items-center">
-                    <QrCode className="w-20 h-20 text-slate-800" />
-                    <span className="text-[9px] text-slate-400 mt-1 uppercase font-bold">Verificar DIAN</span>
+                    <QrCode className="w-16 h-16 text-slate-800" />
+                    <span className="text-[9px] text-slate-500 mt-1 uppercase font-bold">Verificar DIAN</span>
                   </div>
-                  <div className="space-y-1 text-[11px] text-slate-600 flex-1 overflow-hidden">
+                  <div className="space-y-1 text-[11px] text-slate-600 flex-1 min-w-0">
                     <div className="font-bold text-blue-700 uppercase font-sans">
                       ✓ Comprobante Electrónico Válido y Certificado
                     </div>
-                    <div className="truncate">
+                    <div className="break-all">
                       <span className="font-bold text-slate-700">CUFE / Autorización:</span>{' '}
                       {invoice.electronicDetails.authorizationCode}
                     </div>
-                    <div>
+                    <div className="break-all">
                       <span className="font-bold text-slate-700">Firma Digital:</span>{' '}
                       {invoice.electronicDetails.digitalStamp}
                     </div>
-                    <div>
+                    <div className="break-all">
                       <span className="font-bold text-slate-700">Resolución DIAN:</span>{' '}
                       {invoice.electronicDetails.resolutionNumber}
                     </div>
@@ -395,7 +412,7 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
                   <span className="col-span-6">DESCRIPCIÓN</span>
                   <span className="col-span-4 text-right">TOTAL</span>
                 </div>
-                {invoice.items.map((item, idx) => (
+                {(invoice.items || []).map((item, idx) => (
                   <div key={idx} className="grid grid-cols-12 text-[10px]">
                     <span className="col-span-2">{item.quantity}</span>
                     <div className="col-span-6 leading-tight">
@@ -462,14 +479,16 @@ export const InvoiceViewerModal: React.FC<InvoiceViewerModalProps> = ({
               type="button"
               onClick={handleDownloadPdf}
               disabled={isDownloadingPdf}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              className={`px-3 py-1.5 text-white font-bold rounded-lg shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 ${
+                downloadSuccess ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
             >
               {isDownloadingPdf ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <Download className="w-3.5 h-3.5" />
               )}
-              <span>Descargar PDF</span>
+              <span>{isDownloadingPdf ? 'Generando...' : downloadSuccess ? '¡PDF Descargado!' : 'Descargar PDF'}</span>
             </button>
             <button
               type="button"

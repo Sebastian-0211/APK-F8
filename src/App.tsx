@@ -36,7 +36,7 @@ import {
 } from './types';
 import { useBarcodeGun } from './hooks/useBarcodeGun';
 import { soundManager } from './utils/audio';
-import { formatBinCode } from './utils/barcode';
+import { formatBinCode, findMatchingPart } from './utils/barcode';
 import {
   Layers,
   AlertTriangle,
@@ -70,7 +70,14 @@ export default function App() {
     const saved = localStorage.getItem(STORAGE_KEY_PARTS);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map((p) => ({
+            ...p,
+            compatibleVehicles: Array.isArray(p?.compatibleVehicles) ? p.compatibleVehicles : [],
+          }));
+        }
+        return INITIAL_PARTS;
       } catch {
         return INITIAL_PARTS;
       }
@@ -91,7 +98,7 @@ export default function App() {
             totalCols: r.totalCols === 5 ? 4 : r.totalCols,
           }));
         }
-        return parsed;
+        return Array.isArray(parsed) ? parsed : INITIAL_RACKS;
       } catch {
         return INITIAL_RACKS;
       }
@@ -103,7 +110,8 @@ export default function App() {
     const saved = localStorage.getItem(STORAGE_KEY_MOVEMENTS);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : INITIAL_MOVEMENTS;
       } catch {
         return INITIAL_MOVEMENTS;
       }
@@ -115,7 +123,14 @@ export default function App() {
     const saved = localStorage.getItem(STORAGE_KEY_SALES);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map((s) => ({
+            ...s,
+            items: Array.isArray(s?.items) ? s.items : [],
+          }));
+        }
+        return INITIAL_SALES;
       } catch {
         return INITIAL_SALES;
       }
@@ -127,7 +142,8 @@ export default function App() {
     const saved = localStorage.getItem(STORAGE_KEY_PROMOTIONS);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : INITIAL_PROMOTIONS;
       } catch {
         return INITIAL_PROMOTIONS;
       }
@@ -139,7 +155,8 @@ export default function App() {
     const saved = localStorage.getItem(STORAGE_KEY_ROLES);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : DEFAULT_ROLES;
       } catch {
         return DEFAULT_ROLES;
       }
@@ -151,7 +168,8 @@ export default function App() {
     const saved = localStorage.getItem(STORAGE_KEY_USERS);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : INITIAL_USERS;
       } catch {
         return INITIAL_USERS;
       }
@@ -517,12 +535,7 @@ export default function App() {
 
   // Global Hardware Barcode Gun Listener
   const handleGlobalBarcodeScan = useCallback((barcode: string) => {
-    const matched = parts.find(
-      (p) =>
-        p.barcode.toLowerCase() === barcode.toLowerCase() ||
-        p.sku.toLowerCase() === barcode.toLowerCase() ||
-        (p.oemCode && p.oemCode.toLowerCase() === barcode.toLowerCase())
-    );
+    const matched = findMatchingPart(parts, barcode);
 
     if (matched) {
       soundManager.playSuccessBeep();
