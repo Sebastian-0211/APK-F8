@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Auto Parts Collection
+    match /parts/{partId} {
+      allow read: if true;
+      allow create, update: if isValidId(partId)
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 200
+        && request.resource.data.quantity is number
+        && (request.resource.data.salePrice is number || request.resource.data.sellingPrice is number);
+      allow delete: if isValidId(partId);
+    }
+
+    // Movements Log Collection
+    match /movements/{movementId} {
+      allow read: if true;
+      allow create: if isValidId(movementId)
+        && request.resource.data.partId is string
+        && request.resource.data.type is string;
+      allow update: if false; // Audit logs are immutable
+      allow delete: if isValidId(movementId);
+    }
+
+    // Sales Collection
+    match /sales/{saleId} {
+      allow read: if true;
+      allow create, update: if isValidId(saleId)
+        && (request.resource.data.saleNumber is string || request.resource.data.invoiceNumber is string)
+        && request.resource.data.total is number;
+      allow delete: if isValidId(saleId);
+    }
+
+    // Racks Layout Collection
+    match /racks/{rackId} {
+      allow read: if true;
+      allow create, update: if isValidId(rackId)
+        && (request.resource.data.rackNumber is number || request.resource.data.rackId is number)
+        && request.resource.data.totalRows is number
+        && request.resource.data.totalCols is number;
+      allow delete: if isValidId(rackId);
+    }
+
+    // Promotions Collection
+    match /promotions/{promoId} {
+      allow read: if true;
+      allow create, update: if isValidId(promoId)
+        && request.resource.data.partId is string;
+      allow delete: if isValidId(promoId);
+    }
+  }
+}

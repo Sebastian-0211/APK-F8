@@ -19,6 +19,8 @@ import {
   ArrowDownRight
 } from 'lucide-react';
 import { AutoPart, RackConfig, SaleInvoice, AppUser, UserRole } from '../types';
+import { SyncStatusBadge } from './SyncStatusBadge';
+import { SyncStatus } from '../services/cloudSyncService';
 
 export type ActiveTab = 'INVENTORY' | 'SHELVING' | 'SALES' | 'ANALYTICS' | 'MOVEMENTS';
 
@@ -39,6 +41,8 @@ interface HeaderProps {
   onOpenUsersRolesModal: () => void;
   onOpenManualDispatchModal: () => void;
   isGunActive: boolean;
+  syncStatus?: SyncStatus;
+  lastSyncedAt?: Date | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -58,6 +62,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenUsersRolesModal,
   onOpenManualDispatchModal,
   isGunActive,
+  syncStatus = 'synced',
+  lastSyncedAt = null,
 }) => {
   const currentRole = roles.find((r) => r.id === currentUser.roleId);
 
@@ -174,8 +180,15 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </nav>
 
-          {/* Right Actions: User Switcher, Despacho Manual, Facturar, Escanear */}
+          {/* Right Actions: Cloud Sync, User Switcher, Despacho Manual, Facturar, Escanear */}
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Real-time Cloud Twins Sync Status */}
+            <SyncStatusBadge
+              status={syncStatus}
+              lastSyncedAt={lastSyncedAt}
+              itemsCount={parts.length}
+            />
+
             {/* Active User Pill with Quick Switch */}
             <div className="flex items-center">
               <button

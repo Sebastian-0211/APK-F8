@@ -1,0 +1,121 @@
+{
+  "entities": {
+    "AutoPart": {
+      "title": "AutoPart",
+      "description": "Inventory vehicle auto part item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "oemCode": { "type": "string" },
+        "brand": { "type": "string" },
+        "category": { "type": "string" },
+        "compatibleVehicles": { "type": "array" },
+        "location": { "type": "object" },
+        "quantity": { "type": "number" },
+        "minStock": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "unit": { "type": "string" },
+        "barcode": { "type": "string" },
+        "notes": { "type": "string" },
+        "lastUpdated": { "type": "string" },
+        "supplier": { "type": "string" }
+      },
+      "required": ["id", "name", "sku", "barcode", "quantity", "sellingPrice"]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "Audit log for inventory movement (IN/OUT/ADJUSTMENT)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "partId": { "type": "string" },
+        "partName": { "type": "string" },
+        "type": { "type": "string" },
+        "quantity": { "type": "number" },
+        "previousStock": { "type": "number" },
+        "newStock": { "type": "number" },
+        "timestamp": { "type": "string" },
+        "reason": { "type": "string" },
+        "referenceDoc": { "type": "string" },
+        "operatorName": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "partId", "type", "quantity", "timestamp"]
+    },
+    "SaleInvoice": {
+      "title": "SaleInvoice",
+      "description": "Sales invoice registered from POS",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "saleNumber": { "type": "string" },
+        "customer": { "type": "object" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "tax": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "paymentDetails": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "saleNumber", "items", "total", "createdAt"]
+    },
+    "RackConfig": {
+      "title": "RackConfig",
+      "description": "Warehouse rack layout configuration",
+      "type": "object",
+      "properties": {
+        "rackId": { "type": "number" },
+        "name": { "type": "string" },
+        "totalRows": { "type": "number" },
+        "totalCols": { "type": "number" },
+        "categoryFilter": { "type": "string" }
+      },
+      "required": ["rackId", "name", "totalRows", "totalCols"]
+    },
+    "Promotion": {
+      "title": "Promotion",
+      "description": "Discount or promotional campaign",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "value": { "type": "number" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "code", "title", "type", "value"]
+    }
+  },
+  "firestore": {
+    "/parts/{partId}": {
+      "schema": "AutoPart",
+      "description": "Auto parts catalog and real-time inventory counts"
+    },
+    "/movements/{movementId}": {
+      "schema": "StockMovement",
+      "description": "History of inventory dispatches, receptions, and stock corrections"
+    },
+    "/sales/{saleId}": {
+      "schema": "SaleInvoice",
+      "description": "POS sales invoices with itemized lines and payment status"
+    },
+    "/racks/{rackId}": {
+      "schema": "RackConfig",
+      "description": "Physical warehouse layout rack dimensions and mapping"
+    },
+    "/promotions/{promoId}": {
+      "schema": "Promotion",
+      "description": "Active and archived promotional campaign definitions"
+    }
+  }
+}

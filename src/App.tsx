@@ -38,6 +38,22 @@ import { useBarcodeGun } from './hooks/useBarcodeGun';
 import { soundManager } from './utils/audio';
 import { formatBinCode, findMatchingPart } from './utils/barcode';
 import {
+  SyncStatus,
+  subscribeToParts,
+  subscribeToMovements,
+  subscribeToSales,
+  subscribeToRacks,
+  subscribeToPromotions,
+  savePartToCloud,
+  deletePartFromCloud,
+  saveMovementToCloud,
+  saveSaleToCloud,
+  saveRacksToCloud,
+  savePromotionToCloud,
+  seedInitialDataIfEmpty,
+} from './services/cloudSyncService';
+import { testConnection } from './firebase';
+import {
   Layers,
   AlertTriangle,
   Package,
@@ -225,6 +241,96 @@ export default function App() {
     localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(currentUser));
   }, [currentUser]);
 
+  // Real-time Cloud Sync & Digital Twin State
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('connecting');
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+
+  // Firestore Real-Time Subscriptions for Digital Twins (PC & Phone)
+  useEffect(() => {
+    let isMounted = true;
+
+    const setupRealtimeSync = async () => {
+      try {
+        const isOnline = await testConnection();
+        if (!isOnline && isMounted) {
+          setSyncStatus('offline');
+          return;
+        }
+
+        // Auto-seed cloud database if freshly initialized
+        await seedInitialDataIfEmpty(parts, movements, sales, racks, promotions);
+      } catch (err) {
+        console.warn('Initial cloud seed check:', err);
+      }
+    };
+
+    setupRealtimeSync();
+
+    // Attach real-time Firestore listeners
+    const unsubParts = subscribeToParts(
+      (cloudParts) => {
+        if (!isMounted) return;
+        if (cloudParts.length > 0) {
+          setParts(cloudParts);
+        }
+        setSyncStatus('synced');
+        setLastSyncedAt(new Date());
+      },
+      () => {
+        if (isMounted) setSyncStatus('error');
+      }
+    );
+
+    const unsubMovements = subscribeToMovements(
+      (cloudMovements) => {
+        if (!isMounted) return;
+        if (cloudMovements.length > 0) {
+          setMovements(cloudMovements);
+        }
+        setLastSyncedAt(new Date());
+      }
+    );
+
+    const unsubSales = subscribeToSales(
+      (cloudSales) => {
+        if (!isMounted) return;
+        if (cloudSales.length > 0) {
+          setSales(cloudSales);
+        }
+        setLastSyncedAt(new Date());
+      }
+    );
+
+    const unsubRacks = subscribeToRacks(
+      (cloudRacks) => {
+        if (!isMounted) return;
+        if (cloudRacks.length > 0) {
+          setRacks(cloudRacks);
+        }
+        setLastSyncedAt(new Date());
+      }
+    );
+
+    const unsubPromos = subscribeToPromotions(
+      (cloudPromos) => {
+        if (!isMounted) return;
+        if (cloudPromos.length > 0) {
+          setPromotions(cloudPromos);
+        }
+        setLastSyncedAt(new Date());
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      unsubParts();
+      unsubMovements();
+      unsubSales();
+      unsubRacks();
+      unsubPromos();
+    };
+  }, []);
+
   // Navigation and Modal States
   const [activeTab, setActiveTab] = useState<ActiveTab>('INVENTORY');
   const [isScannerModalOpen, setIsScannerModalOpen] = useState<boolean>(false);
@@ -293,17 +399,19 @@ export default function App() {
         timestamp: new Date().toISOString(),
       };
 
+      const updatedPart = {
+        ...target,
+        quantity: newStock,
+        updatedAt: new Date().toISOString(),
+      };
+
       setMovements((prevMovs) => [newMovement, ...prevMovs]);
 
-      return prevParts.map((p) =>
-        p.id === partId
-          ? {
-              ...p,
-              quantity: newStock,
-              updatedAt: new Date().toISOString(),
-            }
-          : p
-      );
+      // Sync to cloud for digital twin multi-device update
+      savePartToCloud(updatedPart).catch((e) => console.error('Cloud sync error part:', e));
+      saveMovementToCloud(newMovement).catch((e) => console.error('Cloud sync error movement:', e));
+
+      return prevParts.map((p) => (p.id === partId ? updatedPart : p));
     });
 
     return success;
@@ -341,17 +449,19 @@ export default function App() {
         timestamp: new Date().toISOString(),
       };
 
+      const updatedPart = {
+        ...target,
+        quantity: newStock,
+        updatedAt: new Date().toISOString(),
+      };
+
       setMovements((prevMovs) => [newMovement, ...prevMovs]);
 
-      return prevParts.map((p) =>
-        p.id === partId
-          ? {
-              ...p,
-              quantity: newStock,
-              updatedAt: new Date().toISOString(),
-            }
-          : p
-      );
+      // Sync to cloud for digital twin multi-device update
+      savePartToCloud(updatedPart).catch((e) => console.error('Cloud sync error part:', e));
+      saveMovementToCloud(newMovement).catch((e) => console.error('Cloud sync error movement:', e));
+
+      return prevParts.map((p) => (p.id === partId ? updatedPart : p));
     });
 
     return success;
@@ -370,8 +480,9 @@ export default function App() {
 
   // Complete New Sale & Deduct Inventory in Bulk
   const handleCompleteSale = useCallback((sale: SaleInvoice) => {
-    // 1. Add sale to state
+    // 1. Add sale to state & sync to cloud
     setSales((prev) => [sale, ...prev]);
+    saveSaleToCloud(sale).catch((e) => console.error('Cloud sale save error:', e));
 
     // 2. Deduct inventory & generate audit logs for each part sold
     setParts((prevParts) => {
@@ -384,13 +495,11 @@ export default function App() {
           const previousStock = target.quantity;
           const newStock = Math.max(0, target.quantity - item.quantity);
 
-          updatedParts = updatedParts.map((p) =>
-            p.id === item.partId
-              ? { ...p, quantity: newStock, updatedAt: new Date().toISOString() }
-              : p
-          );
+          const updated = { ...target, quantity: newStock, updatedAt: new Date().toISOString() };
+          updatedParts = updatedParts.map((p) => (p.id === item.partId ? updated : p));
+          savePartToCloud(updated).catch((e) => console.error('Cloud part save error:', e));
 
-          newMovements.push({
+          const mov: StockMovement = {
             id: 'mov-sale-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
             partId: target.id,
             partName: target.name,
@@ -405,7 +514,9 @@ export default function App() {
             source: 'SALE_INVOICE',
             timestamp: sale.createdAt,
             user: 'Caja & Facturación',
-          });
+          };
+          newMovements.push(mov);
+          saveMovementToCloud(mov).catch((e) => console.error('Cloud movement save error:', e));
         }
       });
 
@@ -565,9 +676,17 @@ export default function App() {
   const handleSavePart = (partData: Omit<AutoPart, 'id' | 'createdAt' | 'updatedAt'>, editId?: string) => {
     const now = new Date().toISOString();
     if (editId) {
+      const existing = parts.find((p) => p.id === editId);
+      const updatedPart: AutoPart = {
+        ...partData,
+        id: editId,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+      };
       setParts((prev) =>
-        prev.map((p) => (p.id === editId ? { ...partData, id: editId, createdAt: p.createdAt, updatedAt: now } : p))
+        prev.map((p) => (p.id === editId ? updatedPart : p))
       );
+      savePartToCloud(updatedPart).catch((e) => console.error('Cloud save part error:', e));
       showToast(`Repuesto "${partData.name}" actualizado con éxito.`, 'success');
     } else {
       const newPart: AutoPart = {
@@ -577,6 +696,7 @@ export default function App() {
         updatedAt: now,
       };
       setParts((prev) => [newPart, ...prev]);
+      savePartToCloud(newPart).catch((e) => console.error('Cloud save part error:', e));
 
       // Log initial creation stock
       if (newPart.quantity > 0) {
@@ -596,6 +716,7 @@ export default function App() {
           timestamp: now,
         };
         setMovements((prev) => [initialMov, ...prev]);
+        saveMovementToCloud(initialMov).catch((e) => console.error('Cloud save movement error:', e));
       }
 
       showToast(`Nuevo repuesto "${newPart.name}" asignado a ${newPart.location.binCode}.`, 'success');
@@ -608,6 +729,7 @@ export default function App() {
     if (!target) return;
     if (window.confirm(`¿Estás seguro de eliminar "${target.name}"?`)) {
       setParts((prev) => prev.filter((p) => p.id !== partId));
+      deletePartFromCloud(partId).catch((e) => console.error('Cloud delete part error:', e));
       if (inspectingPart?.id === partId) {
         setInspectingPart(null);
       }
@@ -670,12 +792,16 @@ export default function App() {
 
   // Rack configs handlers
   const handleUpdateRackConfig = (updated: RackConfig) => {
-    setRacks((prev) => prev.map((r) => (r.rackNumber === updated.rackNumber ? updated : r)));
+    const nextRacks = racks.map((r) => (r.rackNumber === updated.rackNumber ? updated : r));
+    setRacks(nextRacks);
+    saveRacksToCloud(nextRacks).catch((e) => console.error('Cloud save racks error:', e));
     showToast(`Configuración de ${updated.name} actualizada.`, 'success');
   };
 
   const handleAddNewRack = (newRack: RackConfig) => {
-    setRacks((prev) => [...prev, newRack]);
+    const nextRacks = [...racks, newRack];
+    setRacks(nextRacks);
+    saveRacksToCloud(nextRacks).catch((e) => console.error('Cloud save racks error:', e));
     showToast(`Nueva ${newRack.name} agregada al almacén.`, 'success');
   };
 
@@ -793,6 +919,8 @@ export default function App() {
         onOpenUsersRolesModal={() => setIsUsersRolesModalOpen(true)}
         onOpenManualDispatchModal={() => setIsManualDispatchModalOpen(true)}
         isGunActive={isGunActive}
+        syncStatus={syncStatus}
+        lastSyncedAt={lastSyncedAt}
       />
 
       {/* Floating Toast Notification */}
